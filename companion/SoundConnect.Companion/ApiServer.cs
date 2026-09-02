@@ -65,10 +65,19 @@ public sealed class ApiServer : IDisposable
     {
         try
         {
-            // The dashboard is served from a different origin during development.
+            // The dashboard may be served from localhost in development or from a hosted
+            // origin in production; either way it is a browser talking to this machine.
             ctx.Response.AddHeader("Access-Control-Allow-Origin", "*");
             ctx.Response.AddHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
             ctx.Response.AddHeader("Access-Control-Allow-Headers", "Content-Type");
+
+            // Private Network Access: a page on a public origin calling a loopback address
+            // is preflighted by Chrome, and refused unless the response opts in. Without
+            // this, a deployed dashboard cannot reach the companion at all.
+            if (ctx.Request.Headers["Access-Control-Request-Private-Network"] is not null)
+            {
+                ctx.Response.AddHeader("Access-Control-Allow-Private-Network", "true");
+            }
 
             if (ctx.Request.HttpMethod == "OPTIONS")
             {

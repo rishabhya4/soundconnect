@@ -129,8 +129,38 @@ export function subscribe(handlers: {
 }): CompanionStream {
   let socket: WebSocket | null = null;
   let retry: ReturnType<typeof setTimeout> | null = null;
+  let poll: ReturnType<typeof setInterval> | null = null;
   let closed = false;
   let attempts = 0;
+
+  // A page served over HTTPS cannot open ws:// to loopback — browsers treat it as
+  // mixed content. Plain fetch to 127.0.0.1 is still permitted, so when the socket
+  // cannot be established we fall back to polling. Slower to react, but the
+  // dashboard keeps working instead of going dark on a deployed site.
+  const startPolling = () => {
+    if (closed || poll) return;
+
+    const tick = async () => {
+      try {
+        const devices = await fetchDevices();
+        if (closed) return;
+        handlers.onDevices?.(devices);
+        handlers.onStatus?.(true);
+      } catch {
+        if (!closed) handlers.onStatus?.(false);
+      }
+    };
+
+    tick();
+    poll = setInterval(tick, 3000);
+  };
+
+  const stopPolling = () => {
+    if (poll) {
+      clearInterval(poll);
+      poll = null;
+    }
+  };
 
   const connect = () => {
     if (closed) return;
@@ -144,6 +174,7 @@ export function subscribe(handlers: {
 
     socket.onopen = () => {
       attempts = 0;
+      stopPolling(); // the socket is live; polling is redundant
       handlers.onStatus?.(true);
     };
 
@@ -174,6 +205,11 @@ export function subscribe(handlers: {
     attempts += 1;
     const delay = Math.min(1000 * 2 ** Math.min(attempts, 4), 15000);
 
+    // Two failures is enough to conclude the socket is not going to open here —
+    // typically an HTTPS page that cannot reach ws://. Poll from then on, while
+    // still retrying the socket in case the companion simply had not started.
+    if (attempts >= 2) startPolling();
+
     retry = setTimeout(() => {
       retry = null;
       connect();
@@ -186,6 +222,7 @@ export function subscribe(handlers: {
     close: () => {
       closed = true;
       if (retry) clearTimeout(retry);
+      stopPolling();
       socket?.close();
     }
   };
