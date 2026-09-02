@@ -1,0 +1,86 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id             String            @id @default(uuid())
+  email          String            @unique
+  companionToken String            @default(uuid())
+  createdAt      DateTime          @default(now())
+  devices        BluetoothDevice[]
+  sounds         Sound[]
+  settings       Settings?
+}
+
+model BluetoothDevice {
+  id               String                 @id @default(uuid())
+  userId           String
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceIdentifier String
+  name             String
+  type             String                 @default("EARBUDS")
+  connectionMode   String                 @default("WEB_BLUETOOTH") // "WEB_BLUETOOTH" | "ANDROID_COMPANION"
+  enabled          Boolean                @default(true)
+  soundId          String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  assignments      DeviceSoundAssignment[]
+  playbackEvents   PlaybackEvent[]
+}
+
+model Sound {
+  id          String                 @id @default(uuid())
+  userId      String
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  fileUrl     String
+  duration    Float
+  waveform    String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  assignments DeviceSoundAssignment[]
+  events      PlaybackEvent[]
+}
+
+model DeviceSoundAssignment {
+  id            String          @id @default(uuid())
+  deviceId      String
+  device        BluetoothDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  soundId       String
+  sound         Sound           @relation(fields: [soundId], references: [id], onDelete: Cascade)
+  enabled       Boolean         @default(true)
+  volume        Int             @default(80)
+  maxDurationMs Int             @default(5000)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([deviceId, soundId])
+}
+
+model PlaybackEvent {
+  id           String           @id @default(uuid())
+  deviceId     String
+  device       BluetoothDevice  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  soundId      String?
+  sound        Sound?           @relation(fields: [soundId], references: [id], onDelete: SetNull)
+  status       String           // "SUCCESS" | "SKIPPED" | "FAILED"
+  source       String           @default("WEB_BLUETOOTH") // "WEB_BLUETOOTH" | "ANDROID_COMPANION" | "TEST_PREVIEW"
+  timestamp    DateTime         @default(now())
+  errorMessage String?
+}
+
+model Settings {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  autoPlay           Boolean  @default(true)
+  defaultVolume      Int      @default(80)
+  maxDurationMs      Int      @default(5000)
+  androidSyncEnabled Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+}
