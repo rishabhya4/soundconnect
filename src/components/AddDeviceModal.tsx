@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { X, Bluetooth, Smartphone, Headphones, Volume2, Car, Radio, Sparkles, ArrowRight, ShieldAlert, CheckCircle2, Loader2, Info } from 'lucide-react';
 import { isBluetoothSupported, requestBluetoothDeviceWithBrand, getPreviouslyAuthorizedDevices, connectToDevice } from '@/lib/bluetooth';
 import { db, DeviceRecord } from '@/lib/indexed-db';
-import { syncDevice } from '@/lib/sync';
 
 interface AddDeviceModalProps {
   isOpen: boolean;
@@ -87,7 +86,6 @@ export function AddDeviceModal({ isOpen, onClose, onDeviceAdded }: AddDeviceModa
       };
 
       await db.saveDevice(newRecord);
-      await syncDevice(newRecord);
       onDeviceAdded(newRecord);
       onClose();
     } catch (err: any) {
@@ -118,7 +116,6 @@ export function AddDeviceModal({ isOpen, onClose, onDeviceAdded }: AddDeviceModa
       };
 
       await db.saveDevice(newRecord);
-      await syncDevice(newRecord);
       onDeviceAdded(newRecord);
       onClose();
     } catch (err) {

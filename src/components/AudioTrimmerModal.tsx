@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Play, Square, Scissors, Check, Loader2, Music } from 'lucide-react';
 import { validateAudioFile, decodeAudio, createWaveform, trimAudio, audioBufferToWavBlob, createPreviewUrl } from '@/lib/audio';
 import { db, SoundRecord } from '@/lib/indexed-db';
-import { syncSound } from '@/lib/sync';
 
 interface AudioTrimmerModalProps {
   isOpen: boolean;
@@ -159,7 +158,6 @@ export function AudioTrimmerModal({ isOpen, onClose, onSoundSaved }: AudioTrimme
       };
 
       await db.saveSound(soundRecord);
-      await syncSound(soundRecord);
       onSoundSaved(soundRecord);
       onClose();
     } catch (err: any) {
