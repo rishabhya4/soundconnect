@@ -39,12 +39,12 @@ Get-Process dotnet -ErrorAction SilentlyContinue |
     Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
-Write-Host 'Building release copy...'
-& $dotnet build $projectDir -c Release -o $appDir -v q --nologo
-if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
+Write-Host 'Publishing self-contained build (bundles its own runtime)...'
+& $dotnet publish $projectDir -c Release -r win-x64 --self-contained true -o $appDir -v q --nologo
+if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 
-$dll = Join-Path $appDir 'soundconnect.dll'
-if (-not (Test-Path $dll)) { throw "Build produced no soundconnect.dll in $appDir" }
+$exe = Join-Path $appDir 'soundconnect.exe'
+if (-not (Test-Path $exe)) { throw "Publish produced no soundconnect.exe in $appDir" }
 
 Write-Host 'Writing launcher...'
 
@@ -54,7 +54,7 @@ Write-Host 'Writing launcher...'
 $launcherLines = @(
     '@echo off',
     'rem Starts the SoundConnect companion and records what it does.',
-    ('"' + $dotnet + '" "' + $dll + '" >> "' + $logFile + '" 2>&1')
+    ('"' + $exe + '" >> "' + $logFile + '" 2>&1')
 )
 Set-Content -Path $launcher -Value $launcherLines -Encoding ascii
 
