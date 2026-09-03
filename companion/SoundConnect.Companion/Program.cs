@@ -153,10 +153,36 @@ internal static class Program
     {
         if (_state.Get(di.Id) is not null) return; // already known
 
-        BluetoothDevice? dev;
-        try { dev = await BluetoothDevice.FromIdAsync(di.Id); }
-        catch { return; }
-        if (dev is null) return;
+        // FromIdAsync commonly fails or returns null while Windows is still bringing a
+        // device up — the "Connecting..." state during pairing. Retry briefly, and if it
+        // still fails, say so: swallowing it silently lost the device permanently,
+        // because Added does not fire a second time for the same device.
+        BluetoothDevice? dev = null;
+        for (int attempt = 1; attempt <= 3 && dev is null; attempt++)
+        {
+            try
+            {
+                dev = await BluetoothDevice.FromIdAsync(di.Id);
+            }
+            catch (Exception ex)
+            {
+                if (attempt == 3)
+                {
+                    _state.Emit("DEVICE_OPEN_FAILED", di.Id, di.Name,
+                        $"{ex.GetType().Name}: {ex.Message} — will retry when Windows updates it");
+                    return;
+                }
+            }
+
+            if (dev is null && attempt < 3) await Task.Delay(1000 * attempt);
+        }
+
+        if (dev is null)
+        {
+            _state.Emit("DEVICE_OPEN_FAILED", di.Id, di.Name,
+                "device not ready yet — will retry when Windows updates it");
+            return;
+        }
 
         lock (Tracked)
         {
@@ -217,7 +243,24 @@ internal static class Program
     private static async Task RefreshPairingAsync(string deviceId)
     {
         var known = _state.Get(deviceId);
-        if (known is null) return;
+
+        // Second chance for a device we failed to open earlier. Windows fires Updated
+        // repeatedly as a device settles, and by now it is usually ready — without this
+        // a device that was mid-pairing when Added fired would stay invisible until the
+        // companion restarted.
+        if (known is null)
+        {
+            try
+            {
+                var info = await DeviceInformation.CreateFromIdAsync(deviceId);
+                await AddDeviceAsync(info);
+            }
+            catch
+            {
+                // Not a Bluetooth device we can open, or gone again. Nothing to report.
+            }
+            return;
+        }
 
         BluetoothDevice? dev;
         try { dev = await BluetoothDevice.FromIdAsync(deviceId); }

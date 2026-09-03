@@ -1,4 +1,5 @@
 using Windows.Media.Core;
+using Windows.Storage.Streams;
 using Windows.Media.Playback;
 
 namespace SoundConnect.Companion;
@@ -28,6 +29,16 @@ public readonly record struct PlaybackResult(
 /// </summary>
 public sealed class Player
 {
+    private static string ContentTypeFor(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() switch
+        {
+            ".mp3" => "audio/mpeg",
+            ".m4a" or ".aac" => "audio/aac",
+            ".ogg" => "audio/ogg",
+            ".flac" => "audio/flac",
+            _ => "audio/wav"
+        };
+
     public async Task<PlaybackResult> PlayAsync(
         AudioEndpoint endpoint,
         string filePath,
@@ -67,9 +78,26 @@ public sealed class Player
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
+        MediaSource? source = null;
         try
         {
-            player.Source = MediaSource.CreateFromUri(new Uri(Path.GetFullPath(filePath)));
+            // Played from memory, not from the file. CreateFromUri leaves MediaPlayer
+            // holding the file open well past playback, so the next upload for that
+            // device failed with "being used by another process". Reading the bytes up
+            // front releases the file immediately; clips are capped at 10s, so the
+            // memory cost is trivial.
+            var bytes = await File.ReadAllBytesAsync(filePath);
+
+            var buffer = new InMemoryRandomAccessStream();
+            var writer = new DataWriter(buffer);
+            writer.WriteBytes(bytes);
+            await writer.StoreAsync();
+            await writer.FlushAsync();
+            writer.DetachStream();
+            buffer.Seek(0);
+
+            source = MediaSource.CreateFromStream(buffer, ContentTypeFor(filePath));
+            player.Source = source;
             player.Play();
         }
         catch (Exception ex)
@@ -100,6 +128,8 @@ public sealed class Player
         await Task.Delay(maxDurationMs);
 
         player.Pause();
+        player.Source = null;
+        source?.Dispose();
         log?.Invoke($"PLAYBACK_STOPPED  after {maxDurationMs}ms");
 
         return new PlaybackResult(PlaybackOutcome.Started, timeToStart, null);

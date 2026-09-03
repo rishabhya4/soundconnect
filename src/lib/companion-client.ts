@@ -111,6 +111,17 @@ export async function updateAssignment(
   }
 }
 
+/** Unassigns a device's sound. The device itself is untouched. */
+export async function removeAssignment(deviceId: string): Promise<void> {
+  const res = await fetch(
+    `${COMPANION_URL}/api/assignments/${encodeURIComponent(deviceId)}`,
+    { method: 'DELETE' }
+  );
+  if (!res.ok) {
+    throw new Error(`Remove failed: ${res.status}`);
+  }
+}
+
 export interface CompanionStream {
   close: () => void;
 }

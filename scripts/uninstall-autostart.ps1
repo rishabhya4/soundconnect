@@ -17,6 +17,8 @@ $shortcut = Join-Path ([Environment]::GetFolderPath('Startup')) 'SoundConnect Co
 $dotnet   = Join-Path $env:USERPROFILE '.dotnet\dotnet.exe'
 
 Write-Host "Stopping companion..."
+Get-Process soundconnect -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
 Get-Process dotnet -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -eq $dotnet } |
     Stop-Process -Force -ErrorAction SilentlyContinue

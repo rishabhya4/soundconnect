@@ -32,12 +32,15 @@ if (-not (Test-Path $dotnet)) {
 
 New-Item -ItemType Directory -Force -Path $root | Out-Null
 
-# Stop any companion already running, so the build can overwrite and the new
-# instance can bind the port.
+# Stop any companion already running, so the publish can overwrite its files and
+# the new instance can bind the port. Covers both shapes: the self-contained exe,
+# and a framework-dependent run through dotnet from an earlier install.
+Get-Process soundconnect -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
 Get-Process dotnet -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -eq $dotnet } |
     Stop-Process -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
+Start-Sleep -Seconds 3
 
 Write-Host 'Publishing self-contained build (bundles its own runtime)...'
 & $dotnet publish $projectDir -c Release -r win-x64 --self-contained true -o $appDir -v q --nologo

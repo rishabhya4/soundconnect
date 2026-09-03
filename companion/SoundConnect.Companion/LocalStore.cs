@@ -93,7 +93,7 @@ public sealed class LocalStore
         string? soundName = null)
     {
         var fileName = $"{Sanitize(deviceId)}{Path.GetExtension(sourceFile)}";
-        File.Copy(sourceFile, Path.Combine(SoundsDir, fileName), overwrite: true);
+        CopyWithRetry(sourceFile, Path.Combine(SoundsDir, fileName));
 
         var all = LoadAssignments();
         all.RemoveAll(a => string.Equals(a.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
@@ -112,6 +112,56 @@ public sealed class LocalStore
         all.Add(assignment);
         SaveAssignments(all);
         return assignment;
+    }
+
+    /// <summary>
+    /// Removes a device's assignment and its stored audio. Returns false if the device
+    /// had nothing assigned, so the caller can answer honestly rather than pretending.
+    /// </summary>
+    public bool Remove(string deviceId)
+    {
+        var all = LoadAssignments();
+        var existing = all.FirstOrDefault(
+            a => string.Equals(a.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is null) return false;
+
+        all.Remove(existing);
+        SaveAssignments(all);
+
+        try
+        {
+            var path = SoundPath(existing);
+            if (File.Exists(path)) File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // The assignment is gone either way, which is what the user asked for.
+            // A stray file is harmless and will be overwritten by the next assignment.
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Overwriting a clip can collide with a player still releasing it. Retry briefly
+    /// rather than failing the upload — the user sees a 500 for something that resolves
+    /// itself in a few hundred milliseconds.
+    /// </summary>
+    private static void CopyWithRetry(string source, string destination)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.Copy(source, destination, overwrite: true);
+                return;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                Thread.Sleep(200 * attempt);
+            }
+        }
     }
 
     private static string Sanitize(string value)

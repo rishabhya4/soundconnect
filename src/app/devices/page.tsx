@@ -6,7 +6,7 @@ import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
 import { MobileNav } from '@/components/MobileNav';
 import { useCompanion } from '@/hooks/useCompanion';
-import { CompanionDevice, COMPANION_URL, updateAssignment } from '@/lib/companion-client';
+import { CompanionDevice, COMPANION_URL, updateAssignment, removeAssignment } from '@/lib/companion-client';
 
 /**
  * Device list, rendered from the Windows companion's live state.
@@ -121,6 +121,19 @@ function DeviceCard({
 }) {
   const [busy, setBusy] = React.useState(false);
 
+  const clearSound = async () => {
+    if (!confirm(`Remove the connection sound from ${device.name}?`)) return;
+    setBusy(true);
+    try {
+      await removeAssignment(device.id);
+      onChanged();
+    } catch (err) {
+      console.warn('Could not remove the sound:', err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const toggleAutoPlay = async () => {
     setBusy(true);
     try {
@@ -171,6 +184,16 @@ function DeviceCard({
           </button>
         </Field>
       </dl>
+
+      {device.soundFile && (
+        <button
+          onClick={clearSound}
+          disabled={busy}
+          className="mt-4 text-[11px] font-semibold text-rose-300 hover:text-rose-200 disabled:opacity-40 cursor-pointer"
+        >
+          Remove sound
+        </button>
+      )}
 
       {device.audioEndpointName && (
         <p className="mt-3 text-[11px] text-slate-500 truncate">

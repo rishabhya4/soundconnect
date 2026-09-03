@@ -130,6 +130,27 @@ public sealed class ApiServer : IDisposable
                 return;
             }
 
+            // DELETE /api/assignments/{deviceId}  — unassign, leaving the device alone
+            if (ctx.Request.HttpMethod == "DELETE" && path.StartsWith("/api/assignments/", StringComparison.Ordinal))
+            {
+                var deviceId = Uri.UnescapeDataString(path["/api/assignments/".Length..]);
+                var removed = _store.Remove(deviceId);
+
+                _state.Update(deviceId, d =>
+                {
+                    d.SoundFile = null;
+                    d.SoundName = null;
+                });
+
+                if (removed)
+                {
+                    _state.Emit("ASSIGNMENT_REMOVED", deviceId, _state.Get(deviceId)?.Name);
+                }
+
+                await WriteJsonAsync(ctx, new { removed });
+                return;
+            }
+
             ctx.Response.StatusCode = 404;
             await WriteJsonAsync(ctx, new { error = "not found", path });
         }
